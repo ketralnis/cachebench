@@ -393,6 +393,21 @@ fn parse(socket: &mut TcpStream) -> ParseResult {
                         continue;
                     },
                     IResult::Error(err) => {
+                        // TODO NOTE HEY YOU there is a bug in nom
+                        // (https://github.com/Geal/nom/issues/226) that makes
+                        // it impossible to differentiate between incomplete
+                        // data and actual parsing failures. The workaround I
+                        // use here is to pretend that that can never happen, so
+                        // if we have a parsing error then it must be because
+                        // there was incomplete data. This obviously isn't ideal
+                        // and will mask bugs in our parser, particularly
+                        // commands that the server can send that we just don't
+                        // recognise. Hopefully the symptom of this will be the
+                        // program hanging or entering an infinite loop
+                        // repeatedly failing to parse the same data, which
+                        // should be noticeable since we're always run
+                        // interactively
+                        continue;
                         return Err(ClientError::Parse(
                             format!("some parsing issue: {:?}", err)));
                     },
@@ -413,6 +428,8 @@ mod tests {
     use super::*;
     use nom::IResult;
     use nom::Needed;
+    use nom::Err;
+    use nom::ErrorKind;
 
     #[test]
     pub fn tests() {
@@ -447,14 +464,19 @@ mod tests {
                 SingleGetResponse { key: b"thekey1".to_vec(), data: b"data".to_vec(), flags: 0, unique: 150 },
                 SingleGetResponse { key: b"thekey2".to_vec(), data: b"data!".to_vec(), flags: 0, unique: 175 },
             ]})),
+
+            // NOTE if these tests ever start failing, the nom bug documented in
+            // parse() has probably been fixed so the tests and that workaround
+            // should be changed to check for the proper IResult::Incomplete
+            // value
             ("V",
              IResult::Incomplete(Needed::Size(5))),
             ("VALUE",
-             IResult::Incomplete(Needed::Size(10))),
+             IResult::Error(Err::Position(ErrorKind::Alt, b"VALUE"))),
             ("VALUE ",
-             IResult::Incomplete(Needed::Size(10))),
+            IResult::Error(Err::Position(ErrorKind::Alt, b"VALUE "))),
             ("VALUE thekey1",
-             IResult::Incomplete(Needed::Size(10))),
+            IResult::Error(Err::Position(ErrorKind::Alt, b"VALUE thekey1"))),
         ];
 
         for &(ref response, ref expected_result) in &tests {
