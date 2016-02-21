@@ -1,0 +1,12 @@
+[package]
+name = "cachebench"
+version = "0.1.0"
+authors = ["David King <dking@ketralnis.com>"]
+
+[dependencies]
+env_logger = "0.3"
+getopts = "0.2"
+log = "0.3"
+nom = "~1.2.0"
+rand = "0.3"
+time = "0.1"
